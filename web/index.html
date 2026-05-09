@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>Spootify</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0a0a0a; min-height: 100%; overscroll-behavior: none; }
+  body {
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; color: #fff;
+    min-height: 100svh;
+  }
+  *::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
+  button { font-family: inherit; }
+  input { font-family: inherit; }
+
+  #root { min-height: 100svh; display: flex; justify-content: center; background: #0a0a0a; }
+  .phone {
+    position: relative;
+    width: 100%; max-width: 480px;
+    min-height: 100svh;
+    display: flex; flex-direction: column;
+    background: #0a0a0a;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-sizing: border-box;
+    overflow: hidden;  /* importante para que los sheets absolute funcionen */
+  }
+  .boot {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100svh; color: rgba(255,255,255,0.5); font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<div id="root"><div class="boot">Cargando biblioteca…</div></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+<script type="text/babel" src="player.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ─── Helpers que antes venían en data.jsx ─────────────────────
+function hashHue(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+function coverGradient(seed, accent = '#D4FF3D') {
+  const h = hashHue(seed), h2 = (h + 40) % 360;
+  const lift = 18 + (hashHue(seed + 'x') % 18);
+  const dark = `oklch(${lift}% 0.02 ${h})`;
+  const mid  = `oklch(${lift + 10}% 0.015 ${h2})`;
+  const bright = `oklch(${lift + 22}% 0.025 ${h})`;
+  return `radial-gradient(at 20% 15%, ${bright} 0%, transparent 55%), radial-gradient(at 90% 85%, ${accent}22 0%, transparent 45%), linear-gradient(135deg, ${dark} 0%, ${mid} 100%)`;
+}
+const fmtDur = (s) => {
+  if (!s || !isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), r = Math.floor(s % 60);
+  return `${m}:${String(r).padStart(2, '0')}`;
+};
+const totalDuration = (songs) => songs.reduce((a, s) => a + (s.dur || 0), 0);
+const fmtTotal = (s) => {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+};
+Object.assign(window, { hashHue, coverGradient, fmtDur, totalDuration, fmtTotal });
+
+const ACCENT = '#D4FF3D';
+const DENSITY = 'comfortable';
+
+function App({ library }) {
+  const { ARTISTS, SONGS, PLAYLISTS, ALBUMS } = library;
+
+  const [playlists, setPlaylists] = useState(PLAYLISTS);
+  const [nav, setNav] = useState([{ tab: 'library' }]);
+  const current = nav[nav.length - 1];
+  const push = (entry) => setNav(n => [...n, entry]);
+  const pop = () => setNav(n => n.length > 1 ? n.slice(0, -1) : n);
+  const setTab = (tab) => setNav([{ tab }]);
+
+  // Likes — local session.
+  const [likedIds, setLikedIds] = useState(() => {
+    const saved = PLAYLISTS.find(p => p.id === 'saved');
+    return saved ? saved.items.map(it => ({ id: it.id, addedAt: it.addedAt })) : [];
+  });
+  const likedSet = useMemo(() => new Set(likedIds.map(it => it.id)), [likedIds]);
+  useEffect(() => {
+    setPlaylists(prev => prev.map(p => p.id === 'saved' ? { ...p, items: likedIds } : p));
+  }, [likedIds]);
+  const toggleLike = (songId) => setLikedIds(prev =>
+    prev.find(it => it.id === songId)
+      ? prev.filter(it => it.id !== songId)
+      : [{ id: songId, addedAt: Date.now() }, ...prev]);
+
+  // ── Player
+  const audioRef = useRef(null);
+  const [queue, setQueue] = useState([]);
+  const [qIndex, setQIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [shuffle, setShuffle] = useState(false);
+  const [repeat, setRepeat] = useState('off');
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [songMenu, setSongMenu] = useState(null);
+  const [pickerFor, setPickerFor] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 1600); };
+
+  const songsById = useMemo(() => Object.fromEntries(SONGS.map(s => [s.id, s])), [SONGS]);
+  const artistsById = useMemo(() => Object.fromEntries(ARTISTS.map(a => [a.id, a])), [ARTISTS]);
+  const albumsById = useMemo(() => Object.fromEntries(ALBUMS.map(a => [a.id, a])), [ALBUMS]);
+  const currentSongId = queue[qIndex];
+  const currentSong = currentSongId ? songsById[currentSongId] : null;
+  const currentArtist = currentSong ? artistsById[currentSong.artistId] : null;
+
+  // Cuando cambia la pista, cambia el src.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !currentSong) return;
+    if (!el.src.endsWith(currentSong.audioUrl)) {
+      el.src = currentSong.audioUrl;
+      el.load();
+    }
+    if (isPlaying) el.play().catch(() => setIsPlaying(false));
+  }, [currentSongId]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el || !currentSong) return;
+    if (isPlaying) el.play().catch(() => setIsPlaying(false));
+    else el.pause();
+  }, [isPlaying, currentSong]);
+
+  const handleTimeUpdate = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    const d = el.duration || 0;
+    setDuration(d);
+    if (d > 0) setProgress(el.currentTime / d);
+  };
+  const handleLoadedMetadata = () => {
+    const el = audioRef.current;
+    if (el && el.duration) setDuration(el.duration);
+  };
+
+  const playSong = (songId, songList) => {
+    const list = songList || [songId];
+    setQueue(list);
+    setQIndex(Math.max(0, list.indexOf(songId)));
+    setProgress(0);
+    setIsPlaying(true);
+  };
+  const toggle = () => setIsPlaying(p => !p);
+  const handleNext = () => {
+    if (repeat === 'one') {
+      const el = audioRef.current;
+      if (el) { el.currentTime = 0; el.play().catch(()=>{}); }
+      return;
+    }
+    setQIndex(i => {
+      if (i + 1 >= queue.length) {
+        if (repeat === 'all') return 0;
+        setIsPlaying(false);
+        return i;
+      }
+      return i + 1;
+    });
+    setProgress(0);
+  };
+  const handlePrev = () => {
+    const el = audioRef.current;
+    if (el && el.currentTime > 3) { el.currentTime = 0; return; }
+    setQIndex(i => Math.max(0, i - 1));
+    setProgress(0);
+  };
+  const handleSeek = (p) => {
+    const el = audioRef.current;
+    if (!el || !duration) return;
+    el.currentTime = Math.max(0, Math.min(duration, p * duration));
+    setProgress(p);
+  };
+
+  const addToQueue = (songId) => {
+    setQueue(q => [...q, songId]);
+    showToast('Añadida a la cola');
+  };
+  const addToPlaylist = (songId, playlistId) => {
+    setPlaylists(prev => prev.map(p => {
+      if (p.id !== playlistId) return p;
+      if (p.items.find(it => it.id === songId)) return p;
+      return { ...p, items: [{ id: songId, addedAt: Date.now() }, ...p.items] };
+    }));
+    if (playlistId === 'saved' && !likedSet.has(songId)) {
+      setLikedIds(prev => [{ id: songId, addedAt: Date.now() }, ...prev]);
+    }
+    const pl = playlists.find(p => p.id === playlistId);
+    showToast(`Añadida a ${pl?.title || 'playlist'}`);
+  };
+  const createPlaylist = (name) => {
+    const id = 'pl:local:' + Date.now();
+    setPlaylists(prev => [...prev, { id, title: name, subtitle: 'Local', items: [] }]);
+    setCreateOpen(false);
+    showToast(`Playlist "${name}" creada`);
+  };
+
+  // Navegar al artista / álbum de una canción
+  const navigateToArtist = (artistId) => {
+    setNav([{ tab: 'artists' }, { tab: 'artists', artistId }]);
+    setSongMenu(null); setPlayerOpen(false); setQueueOpen(false);
+  };
+  const navigateToAlbum = (song) => {
+    // Busca álbum por (artistId, album) — no tenemos un id directo en la song.
+    const found = ALBUMS.find(a => a.artistId === song.artistId && a.title === song.album);
+    if (!found) { showToast('Álbum no encontrado'); return; }
+    setNav([{ tab: 'library' }, { tab: 'library', albumId: found.id }]);
+    setSongMenu(null); setPlayerOpen(false); setQueueOpen(false);
+  };
+
+  // ── Render de pantallas
+  const renderScreen = () => {
+    if (current.tab === 'library' && !current.playlistId && !current.albumId) {
+      return <LibraryScreen
+        playlists={playlists} albums={ALBUMS} accent={ACCENT} density={DENSITY}
+        onOpenPlaylist={(id) => push({ tab: 'library', playlistId: id })}
+        onOpenAlbum={(id) => push({ tab: 'library', albumId: id })}
+        onCreatePlaylist={() => setCreateOpen(true)}
+      />;
+    }
+    if (current.tab === 'library' && current.playlistId) {
+      const pl = playlists.find(p => p.id === current.playlistId);
+      if (!pl) return <div style={{ padding: 20 }}>Playlist no encontrada</div>;
+      const songs = pl.items.map(it => songsById[it.id]).filter(Boolean);
+      return <PlaylistScreen
+        playlist={pl} songs={songs} artists={ARTISTS} likedSet={likedSet} items={pl.items}
+        onBack={pop} onPlaySong={playSong} onLike={toggleLike}
+        onShuffle={() => { setShuffle(s => !s); if (songs.length) playSong(songs[Math.floor(Math.random()*songs.length)].id, songs.map(s => s.id)); }}
+        shuffleOn={shuffle}
+        onSongMenu={(s) => setSongMenu(s)}
+        onSwipeQueue={(id) => addToQueue(id)}
+        onSwipeAddPlaylist={(id) => setPickerFor(id)}
+        onEdit={() => {}}
+        currentId={currentSongId} isPlaying={isPlaying}
+        accent={ACCENT} density={DENSITY}
+      />;
+    }
+    if (current.tab === 'library' && current.albumId) {
+      const al = albumsById[current.albumId];
+      if (!al) return <div style={{ padding: 20 }}>Álbum no encontrado</div>;
+      const songs = al.items.map(it => songsById[it.id]).filter(Boolean);
+      // Reusamos PlaylistScreen con shape adaptado: es cómodo tener sort/search/play.
+      const pseudo = { ...al, subtitle: al.artistName, coverSeed: al.title + al.artistId };
+      return <PlaylistScreen
+        playlist={pseudo} songs={songs} artists={ARTISTS} likedSet={likedSet} items={al.items}
+        onBack={pop} onPlaySong={playSong} onLike={toggleLike}
+        onShuffle={() => { setShuffle(s => !s); if (songs.length) playSong(songs[Math.floor(Math.random()*songs.length)].id, songs.map(s => s.id)); }}
+        shuffleOn={shuffle}
+        onSongMenu={(s) => setSongMenu(s)}
+        onSwipeQueue={(id) => addToQueue(id)}
+        onSwipeAddPlaylist={(id) => setPickerFor(id)}
+        onEdit={() => {}}
+        currentId={currentSongId} isPlaying={isPlaying}
+        accent={ACCENT} density={DENSITY}
+      />;
+    }
+    if (current.tab === 'artists' && !current.artistId) {
+      return <ArtistsScreen
+        artists={ARTISTS} songs={SONGS} likedSet={likedSet} playlists={playlists}
+        onOpenArtist={(id) => push({ tab: 'artists', artistId: id })}
+        accent={ACCENT} density={DENSITY}
+      />;
+    }
+    if (current.tab === 'artists' && current.artistId) {
+      const artist = artistsById[current.artistId];
+      if (!artist) return <div style={{ padding: 20 }}>Artista no encontrado</div>;
+      // Solo canciones del artista que están en la biblioteca (descargadas).
+      const songs = SONGS.filter(s => s.artistId === artist.id);
+      return <ArtistScreen
+        artist={artist} songs={songs} artists={ARTISTS} likedSet={likedSet}
+        onBack={pop} onPlaySong={playSong} onLike={toggleLike}
+        onSongMenu={(s) => setSongMenu(s)}
+        currentId={currentSongId} isPlaying={isPlaying}
+        accent={ACCENT} density={DENSITY}
+      />;
+    }
+    if (current.tab === 'search') {
+      return <SearchScreen
+        songs={SONGS} artists={ARTISTS} playlists={playlists}
+        likedIds={[...likedSet]} /* compat con firma del prototipo */
+        onPlaySong={playSong} onLike={toggleLike}
+        onSongMenu={(s) => setSongMenu(s)}
+        onOpenArtist={(id) => setNav([{ tab: 'artists' }, { tab: 'artists', artistId: id }])}
+        onOpenPlaylist={(id) => setNav([{ tab: 'library' }, { tab: 'library', playlistId: id }])}
+        accent={ACCENT}
+      />;
+    }
+    return null;
+  };
+
+  const hideTabs = (current.tab === 'library' && (current.playlistId || current.albumId))
+               || (current.tab === 'artists' && current.artistId);
+
+  return (
+    <div className="phone">
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={handleNext}
+        onError={() => setIsPlaying(false)}
+      />
+
+      {/* Espacio para safe area (status bar del notch) */}
+      <div style={{ height: 10, flexShrink: 0 }} />
+
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {renderScreen()}
+      </div>
+
+      {/* Mini player + tabs */}
+      <div style={{ position: 'sticky', bottom: 0, zIndex: 20, paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
+        <MiniPlayer
+          song={currentSong} artist={currentArtist}
+          isPlaying={isPlaying} progress={progress}
+          liked={currentSongId && likedSet.has(currentSongId)}
+          onToggle={toggle} onLike={() => currentSongId && toggleLike(currentSongId)}
+          onOpen={() => setPlayerOpen(true)}
+          accent={ACCENT}
+        />
+        {!hideTabs && (<BottomTabs tab={current.tab} onChange={setTab} accent={ACCENT} />)}
+        {hideTabs && <div style={{ height: 8 }} />}
+      </div>
+
+      {/* Full player */}
+      {playerOpen && currentSong && (
+        <FullPlayer
+          song={currentSong} artist={currentArtist}
+          isPlaying={isPlaying} progress={progress}
+          liked={currentSongId && likedSet.has(currentSongId)}
+          shuffle={shuffle} repeat={repeat}
+          onToggle={toggle} onNext={handleNext} onPrev={handlePrev}
+          onLike={() => currentSongId && toggleLike(currentSongId)}
+          onClose={() => setPlayerOpen(false)}
+          onShuffle={() => setShuffle(s => !s)}
+          onRepeat={() => setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')}
+          onSeek={handleSeek}
+          onOpenQueue={() => setQueueOpen(true)}
+          onMenu={() => currentSong && setSongMenu(currentSong)}
+          accent={ACCENT}
+        />
+      )}
+
+      {/* Queue */}
+      {queueOpen && (
+        <QueueScreen queue={queue} songs={SONGS} artists={ARTISTS}
+          currentIndex={qIndex} onClose={() => setQueueOpen(false)}
+          onJump={(i) => { setQIndex(i); setProgress(0); setIsPlaying(true); }}
+          onSongMenu={(s) => setSongMenu(s)}
+          accent={ACCENT} />
+      )}
+
+      {/* Song context menu */}
+      {songMenu && (
+        <SongMenuSheet song={songMenu} artist={artistsById[songMenu.artistId]}
+          onClose={() => setSongMenu(null)}
+          onGoArtist={() => navigateToArtist(songMenu.artistId)}
+          onGoAlbum={() => navigateToAlbum(songMenu)}
+          onAddQueue={() => { addToQueue(songMenu.id); setSongMenu(null); }}
+          onAddPlaylist={() => { setPickerFor(songMenu.id); setSongMenu(null); }}
+          liked={likedSet.has(songMenu.id)}
+          onToggleLike={() => toggleLike(songMenu.id)}
+          accent={ACCENT} />
+      )}
+
+      {/* Playlist picker */}
+      {pickerFor && (
+        <PlaylistPickerSheet songId={pickerFor} playlists={playlists}
+          onClose={() => setPickerFor(null)}
+          onPick={(plId) => { addToPlaylist(pickerFor, plId); setPickerFor(null); }}
+          onCreate={() => { setPickerFor(null); setCreateOpen(true); }}
+          accent={ACCENT} />
+      )}
+
+      {/* Create playlist */}
+      {createOpen && (
+        <CreatePlaylistSheet onClose={() => setCreateOpen(false)}
+          onCreate={createPlaylist} accent={ACCENT} />
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'absolute', bottom: 110, left: 16, right: 16, zIndex: 400,
+          background: 'rgba(255,255,255,0.95)', color: '#000', padding: '10px 14px', borderRadius: 10,
+          fontSize: 13, fontWeight: 600, textAlign: 'center',
+          boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+        }}>{toast}</div>
+      )}
+    </div>
+  );
+}
+
+async function boot() {
+  const res = await fetch('/api/library.json', { cache: 'no-store' });
+  if (!res.ok) throw new Error('library HTTP ' + res.status);
+  const library = await res.json();
+  // Defensive wait para que Babel haya colgado los componentes en window.
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (window.LibraryScreen && window.PlaylistScreen && window.ArtistsScreen &&
+        window.ArtistScreen && window.SearchScreen && window.MiniPlayer &&
+        window.FullPlayer && window.QueueScreen && window.SongMenuSheet &&
+        window.PlaylistPickerSheet && window.CreatePlaylistSheet && window.BottomTabs) break;
+    await new Promise(r => setTimeout(r, 60));
+  }
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<App library={library} />);
+}
+
+boot().catch(err => {
+  document.getElementById('root').innerHTML =
+    `<div class="boot">Error: ${err.message}</div>`;
+});
+</script>
+</body>
+</html>
