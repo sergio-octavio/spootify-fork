@@ -50,6 +50,14 @@ def _clean(value) -> str:
     return str(value).strip()
 
 
+def _parse_int(value) -> int | None:
+    try:
+        n = int(float(_clean(value)))
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def _read_csv_safely(path: Path) -> pd.DataFrame | None:
     try:
         return pd.read_csv(path, dtype=str, keep_default_na=False)
@@ -124,6 +132,7 @@ def build_track_index(
                     album=_clean(row.get("Album Name")),
                     album_release_date=release_date,
                     isrc=_clean(row.get("ISRC")) or None,
+                    duration_ms=_parse_int(row.get("Duration (ms)") or row.get("Track Duration (ms)")),
                     playlists=[playlist_name],
                     added_at={playlist_name: added_at} if added_at else {},
                 )

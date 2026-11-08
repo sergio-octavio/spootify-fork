@@ -8,6 +8,9 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#0a0a0a" />
 <title>Spootify</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -161,6 +164,7 @@ function App({ library }) {
   const handleLoadedMetadata = () => {
     const el = audioRef.current;
     if (el && el.duration) setDuration(el.duration);
+    updatePositionState();
   };
 
   const playSong = (songId, songList) => {
@@ -193,6 +197,64 @@ function App({ library }) {
     setQIndex(i => Math.max(0, i - 1));
     setProgress(0);
   };
+  // ── Media Session: controles en la pantalla de bloqueo / notificación de
+  // Android, auriculares Bluetooth y Android Auto. También es lo que permite
+  // que Chrome mantenga la música sonando con la pantalla apagada.
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !currentSong) return;
+    const artwork = currentSong.coverUrl
+      ? [{ src: new URL(currentSong.coverUrl, location.href).href, sizes: '512x512' }]
+      : [{ src: new URL('icons/icon-512.png', location.href).href, sizes: '512x512', type: 'image/png' }];
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentSong.title,
+        artist: currentArtist?.name || '',
+        album: currentSong.album || '',
+        artwork,
+      });
+    } catch (e) { /* MediaMetadata no disponible */ }
+  }, [currentSongId]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = currentSong ? (isPlaying ? 'playing' : 'paused') : 'none';
+  }, [isPlaying, currentSongId]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const set = (action, fn) => { try { ms.setActionHandler(action, fn); } catch (e) {} };
+    set('play', () => setIsPlaying(true));
+    set('pause', () => setIsPlaying(false));
+    set('stop', () => setIsPlaying(false));
+    set('nexttrack', () => handleNext());
+    set('previoustrack', () => handlePrev());
+    set('seekto', (d) => {
+      const el = audioRef.current;
+      if (el && d.seekTime != null) el.currentTime = d.seekTime;
+    });
+    set('seekbackward', (d) => {
+      const el = audioRef.current;
+      if (el) el.currentTime = Math.max(0, el.currentTime - (d.seekOffset || 10));
+    });
+    set('seekforward', (d) => {
+      const el = audioRef.current;
+      if (el) el.currentTime = Math.min(el.duration || 0, el.currentTime + (d.seekOffset || 10));
+    });
+  });
+
+  const updatePositionState = () => {
+    const el = audioRef.current;
+    if (!el || !('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+    if (!el.duration || !isFinite(el.duration)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: el.duration, playbackRate: el.playbackRate || 1,
+        position: Math.min(el.currentTime, el.duration),
+      });
+    } catch (e) {}
+  };
+
   const handleSeek = (p) => {
     const el = audioRef.current;
     if (!el || !duration) return;
@@ -327,6 +389,8 @@ function App({ library }) {
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleNext}
+        onSeeked={updatePositionState}
+        onPlay={updatePositionState}
         onError={() => setIsPlaying(false)}
       />
 
@@ -434,6 +498,13 @@ async function boot() {
   }
   const root = ReactDOM.createRoot(document.getElementById('root'));
   root.render(<App library={library} />);
+}
+
+// Service worker: hace la app instalable ("Instalar app" en Chrome Android).
+// Solo funciona en contexto seguro (https:// o localhost); ver README.
+// (Babel ejecuta este script después del evento load, así que se registra ya.)
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW:', err));
 }
 
 boot().catch(err => {

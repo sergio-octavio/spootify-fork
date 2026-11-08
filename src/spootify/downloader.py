@@ -41,6 +41,7 @@ class DownloadResult:
     stderr_tail: str
     elapsed_seconds: float
     size_bytes: int | None = None
+    bitrate_kbps: int | None = None
 
 
 def _classify_error(stdout: str, stderr: str) -> tuple[str, str]:

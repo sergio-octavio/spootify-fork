@@ -3,3 +3,4 @@ pytest>=8.0
 fastapi>=0.110
 uvicorn>=0.30
 mutagen>=1.47
+yt-dlp>=2025.1.1

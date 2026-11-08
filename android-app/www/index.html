@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Spootify</title>
+<style>
+  :root { --accent: #D4FF3D; --bg: #0a0a0a; --fg: #fff; --muted: rgba(255,255,255,.55); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); min-height: 100%;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { min-height: 100svh; display: flex; flex-direction: column; justify-content: center;
+    gap: 18px; padding: 32px 20px; max-width: 480px; margin: 0 auto; }
+  img { width: 72px; height: 72px; }
+  h1 { margin: 0; font-size: 30px; }
+  p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 15px; }
+  label { font-size: 13px; color: var(--muted); }
+  input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid #333; background: #161616;
+    color: var(--fg); font-size: 16px; }
+  input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  button { padding: 14px; border-radius: 999px; border: 0; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .primary { background: var(--accent); color: #000; }
+  .ghost { background: transparent; color: var(--fg); border: 1px solid #333; }
+  .status { min-height: 1.4em; font-size: 14px; }
+  .error { color: #ff7a7a; }
+  code { background: #1c1c1c; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <img src="icon.png" alt="" />
+  <h1>Spootify</h1>
+  <p>Escribe la dirección de tu ordenador con Spootify. En el ordenador ejecuta
+     <code>./run.sh serve</code> y te mostrará la IP.</p>
+  <label for="url">Dirección del servidor</label>
+  <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
+         placeholder="http://192.168.1.20:8000" />
+  <button id="go" class="primary">Conectar</button>
+  <button id="cancel" class="ghost" hidden>Cambiar servidor</button>
+  <div id="status" class="status" role="status"></div>
+</main>
+<script>
+  const KEY = 'spootify.server';
+  const $ = (id) => document.getElementById(id);
+  const input = $('url'), status = $('status'), go = $('go'), cancel = $('cancel');
+  let autoTimer = null;
+
+  function normalize(raw) {
+    let s = (raw || '').trim();
+    if (!s) return '';
+    if (!/^https?:\/\//i.test(s)) s = 'http://' + s;
+    // Si no indica puerto y es http, el servidor de Spootify usa el 8000.
+    try {
+      const u = new URL(s);
+      if (!u.port && u.protocol === 'http:' && !/\.ts\.net$/.test(u.hostname)) u.port = '8000';
+      return u.origin + '/';
+    } catch (e) { return ''; }
+  }
+
+  async function reachable(base) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    try {
+      // no-cors: solo queremos saber si responde (la respuesta es opaca).
+      await fetch(base + 'manifest.webmanifest', { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+      return true;
+    } catch (e) { return false; } finally { clearTimeout(t); }
+  }
+
+  async function connect(base) {
+    status.className = 'status';
+    status.textContent = 'Conectando con ' + base + '…';
+    go.disabled = true;
+    const ok = await reachable(base);
+    go.disabled = false;
+    if (!ok) {
+      status.className = 'status error';
+      status.textContent = 'No responde. ¿Está el ordenador encendido, en la misma WiFi y con ./run.sh serve?';
+      return;
+    }
+    localStorage.setItem(KEY, base);
+    location.href = base;
+  }
+
+  go.addEventListener('click', () => {
+    clearTimeout(autoTimer); cancel.hidden = true;
+    const base = normalize(input.value);
+    if (!base) { status.className = 'status error'; status.textContent = 'Dirección no válida.'; return; }
+    connect(base);
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
+  cancel.addEventListener('click', () => {
+    clearTimeout(autoTimer); cancel.hidden = true;
+    status.textContent = ''; input.focus();
+  });
+
+  const saved = localStorage.getItem(KEY);
+  if (saved) {
+    input.value = saved;
+    cancel.hidden = false;
+    status.textContent = 'Abriendo ' + saved + '…';
+    autoTimer = setTimeout(() => { cancel.hidden = true; connect(saved); }, 1200);
+  } else {
+    input.focus();
+  }
+</script>
+</body>
+</html>
