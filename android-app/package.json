@@ -6,7 +6,8 @@
   "scripts": {
     "sync": "cap sync android",
     "build:debug": "cap sync android && cd android && ./gradlew assembleDebug",
-    "open": "cap open android"
+    "open": "cap sync android && cap open android",
+    "studio": "cap sync android && (${CAPACITOR_ANDROID_STUDIO_PATH:-android-studio} android >/dev/null 2>&1 &)"
   },
   "dependencies": {
     "@capacitor/android": "7.6.10",

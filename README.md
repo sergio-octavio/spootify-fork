@@ -293,6 +293,41 @@ npm install
 npm run build:debug   # → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+#### Instalarlo desde Android Studio (Ubuntu)
+
+1. **Instala las herramientas** (una vez):
+
+   ```
+   sudo snap install android-studio --classic
+   # Node 20 o superior (el de apt en Ubuntu suele ser más viejo):
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+
+   Abre Android Studio una vez y deja que el asistente descargue el SDK.
+
+2. **Prepara el proyecto** (cada vez que hagas `git pull`). Este paso es
+   obligatorio: genera ficheros que no están en git y sin ellos Android Studio
+   da error al sincronizar Gradle.
+
+   ```
+   cd android-app
+   npm install
+   npm run studio      # sincroniza y abre Android Studio con el proyecto
+   ```
+
+   Si `npm run studio` no encuentra Android Studio, ábrelo a mano con
+   **File → Open** y elige la carpeta `android-app/android` (no `android-app`).
+
+3. **Conecta el móvil**: en el móvil, *Ajustes → Información del teléfono* →
+   toca 7 veces *Número de compilación*; luego en *Opciones de desarrollador*
+   activa **Depuración USB**. Conéctalo por cable y acepta el aviso
+   "¿Permitir depuración USB?". (Sin cable: *Depuración inalámbrica* y en
+   Android Studio **Pair Devices Using Wi-Fi**.)
+
+4. Arriba en Android Studio elige tu móvil en el desplegable de dispositivos
+   y pulsa **Run ▶** (Shift+F10). Compila, instala y abre Spootify.
+
 > [!NOTE]
 > Con el APK la pantalla de bloqueo no muestra carátula ni botones de
 > siguiente/anterior (el WebView de Android no los expone). Si los quieres,
