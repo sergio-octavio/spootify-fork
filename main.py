@@ -15,6 +15,7 @@ from spootify.artwork import save_album_cover
 from spootify.downloader import download_track
 from spootify.parser import build_track_index, serialize_index
 from spootify.state_manager import StateManager
+from spootify.youtube import download_track_youtube
 
 
 logger = logging.getLogger("spootify")
@@ -73,7 +74,8 @@ def cmd_download(args: argparse.Namespace) -> int:
         pending = state.get_pending(
             all_uris,
             retry_attempts=args.retry_attempts,
-            include_unavailable=args.include_unavailable,
+            # Lo que Spotify marca como "unavailable" suele estar en YouTube.
+            include_unavailable=args.include_unavailable or args.source == "youtube",
         )
 
     if args.limit:
@@ -93,9 +95,10 @@ def cmd_download(args: argparse.Namespace) -> int:
         return 0
 
     zotify_bin = Path(args.zotify_bin)
-    if not zotify_bin.exists():
+    if args.source == "zotify" and not zotify_bin.exists():
         logger.error("No se encontró el binario de Zotify en %s", zotify_bin)
         return 2
+    logger.info("Fuente de descarga: %s", args.source)
 
     # Flush del estado si el usuario corta.
     def _flush(signum, frame):
@@ -114,20 +117,31 @@ def cmd_download(args: argparse.Namespace) -> int:
             label = f"{', '.join(info.get('artists', [])) or '?'} — {info.get('name', '?')}"
             logger.info("[%d/%d] %s  (%s)", i, len(pending), label, uri)
 
-            result = download_track(
-                uri=uri,
-                zotify_bin=zotify_bin,
-                library_root=args.library,
-                audio_format=args.audio_format,
-                download_quality=args.download_quality,
-                timeout_seconds=args.track_timeout,
-            )
+            if args.source == "youtube":
+                result = download_track_youtube(
+                    uri=uri,
+                    info=info,
+                    library_root=args.library,
+                    audio_format=args.yt_format,
+                    timeout_seconds=args.track_timeout,
+                )
+            else:
+                result = download_track(
+                    uri=uri,
+                    zotify_bin=zotify_bin,
+                    library_root=args.library,
+                    audio_format=args.audio_format,
+                    download_quality=args.download_quality,
+                    timeout_seconds=args.track_timeout,
+                )
 
             if result.success:
                 state.mark_success(
                     uri,
                     path=result.path or "",
-                    bitrate_kbps=_quality_to_kbps(args.download_quality),
+                    bitrate_kbps=result.bitrate_kbps or (
+                        _quality_to_kbps(args.download_quality) if args.source == "zotify" else None
+                    ),
                     size_bytes=result.size_bytes,
                 )
                 ok += 1
@@ -137,7 +151,7 @@ def cmd_download(args: argparse.Namespace) -> int:
                     result.elapsed_seconds,
                     _human_bytes(result.size_bytes),
                 )
-                if result.path and not args.no_cover:
+                if result.path and not args.no_cover and args.source == "zotify":
                     try:
                         cover = save_album_cover(Path(result.path))
                         if cover is not None:
@@ -251,6 +265,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--state-dir", type=Path, default=Path("state"))
     p.add_argument("--library", type=Path, default=Path("downloads/raw"), help="Directorio raíz donde Zotify guarda los audios")
     p.add_argument("--zotify-bin", type=Path, default=DEFAULT_ZOTIFY_BIN)
+    p.add_argument("--source", default="zotify", choices=["zotify", "youtube"],
+                   help="De dónde descargar: zotify (Spotify Premium) o youtube (YouTube Music vía yt-dlp)")
+    p.add_argument("--yt-format", default="best", choices=["best", "opus", "m4a", "mp3", "flac"],
+                   help="Con --source youtube: 'best' guarda el audio original sin recomprimir (recomendado)")
     p.add_argument("--audio-format", default="mp3")
     p.add_argument("--download-quality", default="very_high", choices=["normal", "high", "very_high", "auto"])
     p.add_argument("--track-timeout", type=int, default=180, help="Timeout por track en segundos")
@@ -379,6 +397,19 @@ def cmd_progress(args: argparse.Namespace) -> int:
     return 0
 
 
+def _lan_ip() -> str | None:
+    """IP de este ordenador en la red local (no envía tráfico: UDP sin datos)."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))
+            ip = s.getsockname()[0]
+        return None if ip.startswith("127.") else ip
+    except OSError:
+        return None
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
     from spootify.server import create_app
@@ -390,7 +421,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
         web_dir=args.web_dir,
     )
     logger.info("Spootify web: http://%s:%d", args.host, args.port)
-    logger.info("Desde tu móvil en la misma WiFi: http://<ip-de-este-mac>:%d", args.port)
+    lan_ip = _lan_ip()
+    logger.info(
+        "Desde tu móvil en la misma WiFi (o en la app Android): http://%s:%d",
+        lan_ip or "<ip-de-este-ordenador>", args.port,
+    )
     uvicorn.run(app, host=args.host, port=args.port, log_level="info", access_log=False)
     return 0
 

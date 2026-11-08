@@ -1,0 +1,18 @@
+{
+  "name": "spootify-android",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App Android (Capacitor) que abre el reproductor de Spootify servido desde tu ordenador",
+  "scripts": {
+    "sync": "cap sync android",
+    "build:debug": "cap sync android && cd android && ./gradlew assembleDebug",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.6.10",
+    "@capacitor/core": "7.6.10"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.10"
+  }
+}

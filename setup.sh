@@ -67,6 +67,11 @@ pip install -r requirements.txt --quiet
 step "Instalando Zotify (fork DraftKinner con OAuth)"
 pip install --quiet 'git+https://github.com/DraftKinner/zotify.git'
 
+# 5b. yt-dlp (fuente alternativa: YouTube Music). Se actualiza a menudo porque
+#     YouTube cambia; vuelve a lanzar ./setup.sh si las descargas empiezan a fallar.
+step "Actualizando yt-dlp"
+pip install --quiet --upgrade yt-dlp
+
 # 6. Carpetas necesarias
 mkdir -p playlists_csv state logs downloads/raw web
 

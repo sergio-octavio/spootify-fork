@@ -29,6 +29,24 @@ case "$cmd" in
     echo "Ver log:       tail -f logs/bulk-download.log"
     echo "Parar:         ./run.sh stop"
     ;;
+  download-yt)
+    # Igual que download, pero desde YouTube Music (yt-dlp). No necesita Premium.
+    mkdir -p logs
+    nohup $PY main.py --download --source youtube "$@" > logs/bulk-download.log 2>&1 &
+    PID=$!
+    disown
+    echo "Descarga desde YouTube lanzada en background (PID $PID)."
+    echo "Ver progreso:  ./run.sh progress"
+    echo "Ver log:       tail -f logs/bulk-download.log"
+    echo "Parar:         ./run.sh stop"
+    ;;
+  download-yt-test)
+    $PY main.py --download --source youtube --limit 3 --verbose "$@"
+    ;;
+  retry-yt)
+    # Reintenta en YouTube lo que falló con Zotify (p.ej. canciones retiradas de Spotify).
+    $PY main.py --retry-failed --source youtube "$@"
+    ;;
   download-test)
     # Descarga las 3 primeras canciones pendientes — útil para probar Zotify y la auth.
     $PY main.py --download --limit 3
@@ -62,7 +80,10 @@ Uso: ./run.sh <comando>
 
   index             Construye el índice a partir de los CSVs en playlists_csv/
   download-test     Descarga 3 canciones (prueba inicial / auth)
-  download          Descarga toda la biblioteca en background
+  download          Descarga toda la biblioteca en background (Zotify/Spotify)
+  download-yt-test  Descarga 3 canciones desde YouTube Music (prueba)
+  download-yt       Descarga toda la biblioteca desde YouTube Music
+  retry-yt          Reintenta en YouTube las canciones que fallaron
   progress          Muestra progreso una vez
   watch             Muestra progreso en vivo (Ctrl+C para salir)
   stop              Para la descarga en background

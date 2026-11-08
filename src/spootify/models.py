@@ -12,6 +12,7 @@ class TrackInfo:
     album: str
     album_release_date: str
     isrc: str | None
+    duration_ms: int | None = None
     playlists: list[str] = field(default_factory=list)
     added_at: dict[str, str] = field(default_factory=dict)
 

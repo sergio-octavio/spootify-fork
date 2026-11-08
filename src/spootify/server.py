@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from mutagen.mp3 import MP3
+import mutagen
 
 from .artwork import album_dir_for
 
@@ -131,9 +131,9 @@ def build_library(
             }
         artist_id = artists_by_name[primary_artist]["id"]
 
-        # Duración desde el MP3 (una vez por track, cacheable).
+        # Duración leída del fichero (MP3, Opus, M4A, FLAC...).
         try:
-            dur = int(MP3(mp3_path).info.length)
+            dur = int(mutagen.File(mp3_path).info.length)
         except Exception:
             dur = 0
 

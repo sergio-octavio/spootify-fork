@@ -15,9 +15,12 @@ que puedes usar desde tu iPhone, Android o cualquier ordenador en tu WiFi.
 
 1. Lee los CSVs que exportas con [Exportify](https://exportify.net/) (lista de
    tus playlists con sus canciones).
-2. Descarga todos los MP3s con sus covers (carátulas) y metadatos.
+2. Descarga todas las canciones con sus covers (carátulas) y metadatos, desde
+   Spotify (Zotify, necesita Premium) **o desde YouTube Music** (yt-dlp, sin
+   cuenta). Ver [Descargar desde YouTube Music](#descargar-desde-youtube-music).
 3. Te ofrece un reproductor web tipo Spotify para escucharlos desde el móvil
-   o el navegador, con tus playlists, álbumes y artistas.
+   o el navegador, con tus playlists, álbumes y artistas. En **Android** se
+   instala como app, ver [Usar Spootify en Android](#usar-spootify-en-android).
 
 ---
 
@@ -144,6 +147,118 @@ Abre <http://localhost:8000> en cualquier navegador del Mac.
 
 ---
 
+## Descargar desde YouTube Music
+
+Alternativa a Zotify que no necesita Spotify Premium ni iniciar sesión. Usa
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) para buscar cada canción de tus
+CSVs en YouTube Music y descargar el audio.
+
+> [!IMPORTANT]
+> Igual que con Zotify, descargar de YouTube va contra sus Términos de Servicio.
+> Es **uso personal**: no distribuyas lo que descargues.
+
+```
+./run.sh index              # si no lo has hecho ya
+./run.sh download-yt-test   # prueba con 3 canciones
+./run.sh download-yt        # toda la biblioteca en background
+./run.sh retry-yt           # reintenta en YouTube lo que falló con Zotify
+```
+
+Cómo elige la canción: busca primero en la pestaña *Canciones* de YouTube
+Music (los audios oficiales de los canales "- Topic", con la carátula del
+álbum) y luego en YouTube. Puntúa cada resultado por título, artista y
+**duración** (si tu CSV de Exportify trae la columna *Duration (ms)*, que es lo
+normal) y descarta directos, covers, karaoke, remixes, *sped up*… salvo que la
+canción original de Spotify también lo sea. Si no encuentra nada fiable, la
+marca como `unavailable` en vez de bajar algo que no es.
+
+Puedes mezclar fuentes: las canciones ya descargadas con Zotify no se tocan,
+y las que Spotify marcó como "no disponibles" se intentan en YouTube.
+
+### ¿Y la calidad?
+
+Siendo sinceros: **YouTube no suena mejor que Spotify Premium**. Lo que ofrece:
+
+| Fuente | Formato | Calidad aproximada |
+| --- | --- | --- |
+| Spotify Premium (Zotify) | Ogg Vorbis 320 kbps → convertido a MP3 | Muy alta |
+| YouTube Music (yt-dlp) | Opus ~130-160 kbps, original | Alta; Opus a ese bitrate suena casi igual que MP3 320 |
+| Bandcamp / Qobuz / 7digital (comprando) | FLAC sin pérdida | Máxima |
+
+Por eso, por defecto Spootify guarda el audio de YouTube **tal cual, sin
+recomprimir** (`--yt-format best`, ficheros `.opus` o `.m4a`): cada conversión
+pierde algo. Opciones:
+
+```
+./run.sh download-yt --yt-format m4a   # AAC; mejor para iPhone/Safari
+./run.sh download-yt --yt-format mp3   # recomprime a MP3 (pierde calidad)
+```
+
+Si quieres de verdad **más** calidad que Spotify, la vía es comprar en FLAC
+(Bandcamp, Qobuz…). El reproductor ya lee FLAC, Opus, M4A y MP3.
+
+> [!TIP]
+> YouTube cambia a menudo y yt-dlp se actualiza para seguirle el ritmo. Si las
+> descargas empiezan a fallar, vuelve a lanzar `./setup.sh` (actualiza yt-dlp).
+
+---
+
+## Usar Spootify en Android
+
+El ordenador sigue siendo el que guarda la música y ejecuta `./run.sh serve`;
+el móvil la reproduce por la red. Hay dos formas, elige una:
+
+### Opción A — Instalar como app desde Chrome (recomendada)
+
+Es lo más sencillo y lo que mejor funciona en segundo plano: controles en la
+pantalla de bloqueo y en la notificación, botones de auriculares Bluetooth y
+Android Auto.
+
+1. En el móvil abre Chrome en `http://<ip-del-ordenador>:8000`.
+2. Menú ⋮ → **Añadir a pantalla de inicio** / **Instalar app**.
+
+Chrome solo instala la app "de verdad" (pantalla completa, icono propio,
+arranque instantáneo) si la web va por **HTTPS**. La forma más fácil de
+tenerlo, y de escuchar tu música también **fuera de casa**, es
+[Tailscale](https://tailscale.com) (gratis para uso personal):
+
+```
+# En el ordenador, con Tailscale instalado y la sesión iniciada:
+tailscale serve --bg 8000
+```
+
+Instala Tailscale también en el móvil con la misma cuenta, y abre en Chrome
+la dirección `https://<nombre-del-ordenador>.<tu-tailnet>.ts.net` que te
+muestra el comando. Desde ahí, **Instalar app**.
+
+### Opción B — APK de Android
+
+En `android-app/` hay una app Android (Capacitor) que abre el reproductor de
+tu ordenador. La primera vez te pide la dirección (`192.168.1.20:8000`, o la
+de Tailscale) y la recuerda. El botón "atrás" la manda a segundo plano sin
+cortar la música, y mantiene una notificación para que Android no la cierre
+con la pantalla apagada.
+
+**Descargar el APK ya compilado:** en GitHub → pestaña **Actions** → workflow
+**Android APK** → la ejecución más reciente → *Artifacts* → `spootify-apk`.
+Descomprime el zip, pasa `app-debug.apk` al móvil y ábrelo (Android te pedirá
+permitir "instalar apps de origen desconocido").
+
+**Compilarlo tú** (necesitas Node 20+ y Android Studio / JDK 21):
+
+```
+cd android-app
+npm install
+npm run build:debug   # → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+> [!NOTE]
+> Con el APK la pantalla de bloqueo no muestra carátula ni botones de
+> siguiente/anterior (el WebView de Android no los expone). Si los quieres,
+> usa la opción A.
+
+---
+
 ## Cómo funciona la organización en disco
 
 ```
@@ -166,7 +281,10 @@ fecha en que añadiste cada canción.
 ```
 ./run.sh index           # Construye el índice desde los CSVs
 ./run.sh download-test   # Descarga 3 canciones (prueba)
-./run.sh download        # Descarga toda la biblioteca en background
+./run.sh download        # Descarga toda la biblioteca en background (Spotify)
+./run.sh download-yt-test # Descarga 3 canciones desde YouTube Music (prueba)
+./run.sh download-yt     # Descarga toda la biblioteca desde YouTube Music
+./run.sh retry-yt        # Reintenta en YouTube las que fallaron
 ./run.sh progress        # Snapshot del progreso
 ./run.sh watch           # Progreso en vivo
 ./run.sh stop            # Para la descarga
@@ -205,13 +323,17 @@ spootify/
 │   ├── parser.py           # Parser de CSVs de Exportify
 │   ├── state_manager.py    # Estado de descargas + resume
 │   ├── downloader.py       # Wrapper de Zotify
+│   ├── youtube.py          # Descargas desde YouTube Music (yt-dlp)
 │   ├── artwork.py          # Extracción de carátulas
 │   └── server.py           # Reproductor web (FastAPI)
-├── web/                    # Front-end React (Babel in-browser)
+├── web/                    # Front-end React (Babel in-browser), PWA instalable
 │   ├── index.html
+│   ├── manifest.webmanifest
+│   ├── sw.js
 │   ├── components.jsx
 │   ├── screens.jsx
 │   └── player.jsx
+├── android-app/            # App Android (Capacitor) → APK
 ├── playlists_csv/          # ⬅ Tú pones aquí los CSVs de Exportify
 ├── downloads/raw/          # MP3s descargados
 └── state/                  # Estado interno (índice, descargados, fallos)

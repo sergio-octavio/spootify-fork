@@ -1,0 +1,14 @@
+{
+  "appId": "com.spootify.app",
+  "appName": "Spootify",
+  "webDir": "www",
+  "backgroundColor": "#0a0a0a",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": ["*", "*.*", "*.*.*", "*.*.*.*", "*.*.*.*.*", "*.*.*.*.*.*"]
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
