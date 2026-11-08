@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import re
 import unicodedata
 import urllib.parse
@@ -11,11 +12,24 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from mutagen.mp3 import MP3
+import mutagen
 
 from .artwork import album_dir_for
 
 logger = logging.getLogger(__name__)
+
+# Python no siempre conoce estos tipos; sin ellos el navegador recibe
+# application/octet-stream y algunos (Chrome Android) no reproducen el audio.
+for _ext, _mime in {
+    ".flac": "audio/flac",
+    ".m4a": "audio/mp4",
+    ".opus": "audio/ogg",
+    ".ogg": "audio/ogg",
+    ".wav": "audio/wav",
+    ".aiff": "audio/aiff",
+    ".aif": "audio/aiff",
+}.items():
+    mimetypes.add_type(_mime, _ext)
 
 
 def _slug(text: str) -> str:
@@ -131,9 +145,9 @@ def build_library(
             }
         artist_id = artists_by_name[primary_artist]["id"]
 
-        # Duración desde el MP3 (una vez por track, cacheable).
+        # Duración desde el fichero (MP3, FLAC, M4A...).
         try:
-            dur = int(MP3(mp3_path).info.length)
+            dur = int(mutagen.File(mp3_path).info.length)
         except Exception:
             dur = 0
 
@@ -165,6 +179,10 @@ def build_library(
                 "dur": dur,
                 "audioUrl": audio_url,
                 "coverUrl": cover_url,
+                "quality": dl.get("quality") or (
+                    f"MP3 {dl['bitrate_kbps']} kbps" if dl.get("bitrate_kbps") else None
+                ),
+                "source": dl.get("source") or "zotify",
             }
         )
 
