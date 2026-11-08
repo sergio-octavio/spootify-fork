@@ -16,6 +16,9 @@ class DownloadedEntry:
     timestamp: str
     bitrate_kbps: int | None = None
     bytes: int | None = None
+    source: str | None = None   # "zotify" | "local"
+    codec: str | None = None    # "mp3" | "flac" | "alac" | ...
+    quality: str | None = None  # etiqueta legible, p. ej. "FLAC 24-bit/96 kHz"
 
 
 @dataclass
@@ -45,8 +48,10 @@ class StateManager:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         if self.downloaded_path.exists():
             raw = json.loads(self.downloaded_path.read_text(encoding="utf-8"))
+            known = set(DownloadedEntry.__dataclass_fields__)
             self.downloaded = {
-                uri: DownloadedEntry(**data) for uri, data in raw.items()
+                uri: DownloadedEntry(**{k: v for k, v in data.items() if k in known})
+                for uri, data in raw.items()
             }
         if self.failed_path.exists():
             raw = json.loads(self.failed_path.read_text(encoding="utf-8"))
@@ -84,6 +89,9 @@ class StateManager:
         path: str,
         bitrate_kbps: int | None = None,
         size_bytes: int | None = None,
+        source: str | None = None,
+        codec: str | None = None,
+        quality: str | None = None,
     ) -> None:
         self.downloaded[uri] = DownloadedEntry(
             uri=uri,
@@ -91,6 +99,9 @@ class StateManager:
             timestamp=_now_iso(),
             bitrate_kbps=bitrate_kbps,
             bytes=size_bytes,
+            source=source,
+            codec=codec,
+            quality=quality,
         )
         # Un éxito limpia cualquier registro previo de fallo.
         self.failed.pop(uri, None)

@@ -142,6 +142,47 @@ Abre <http://localhost:8000> en cualquier navegador del Mac.
 2. En el iPhone/Android abre el navegador y entra a `http://<ip-del-mac>:8000`.
 3. Safari → Compartir → "Añadir a pantalla de inicio". Se comporta como app.
 
+### Paso 6 (opcional) — Importar tu música en alta calidad (FLAC, ALAC…)
+
+Spotify da como máximo MP3 a 320 kbps (con pérdida). Si tienes la música en
+mejor calidad, Spootify puede usarla en lugar del MP3:
+
+- **Compras sin DRM** en [Bandcamp](https://bandcamp.com) (FLAC, ALAC, WAV),
+  [Qobuz](https://www.qobuz.com/shop) (hasta 24-bit/192 kHz),
+  [7digital](https://www.7digital.com) o [HDtracks](https://www.hdtracks.com).
+- **CDs propios** ripeados a FLAC (por ejemplo con
+  [Exact Audio Copy](https://www.exactaudiocopy.de/) o
+  [fre:ac](https://www.freac.org/)).
+- Música con licencia libre de [Jamendo](https://www.jamendo.com),
+  [Free Music Archive](https://freemusicarchive.org) o
+  [Internet Archive](https://archive.org/details/audio) (mucha en FLAC).
+
+Pon los ficheros en cualquier carpeta (con sus subcarpetas) y ejecuta:
+
+```
+./run.sh import ~/Music/Bandcamp --dry-run   # primero, para ver qué encaja
+./run.sh import ~/Music/Bandcamp             # copia a downloads/raw/
+```
+
+Cada fichero se empareja con una canción de tus playlists por **ISRC** o, si
+no lo tiene, por **artista + título** (ignorando acentos, "feat." y
+"Remastered"). Si la canción ya estaba descargada en MP3, la versión
+lossless la **sustituye** en el reproductor (el MP3 antiguo no se borra).
+Al final te lista los ficheros que no ha sabido emparejar.
+
+Opciones: `--import-mode move` (mover en vez de copiar), `--import-mode link`
+(hardlink, no ocupa espacio extra) y `--no-upgrade` (no sustituir lo que ya
+tienes). En el reproductor verás una etiqueta tipo `FLAC 24-bit/96 kHz`.
+
+> [!NOTE]
+> FLAC se reproduce en Chrome/Firefox (Android, PC) y Safari (iPhone, Mac).
+> ALAC (`.m4a` de Apple) solo en Safari: para Android, mejor FLAC.
+
+> [!NOTE]
+> No hay importador desde YouTube a propósito: descargar de YouTube va contra
+> sus Términos de Servicio, y además su audio es AAC/Opus a ~128-160 kbps,
+> **peor** que el MP3 320 de Spotify. No ganarías calidad.
+
 ---
 
 ## Cómo funciona la organización en disco
@@ -171,6 +212,7 @@ fecha en que añadiste cada canción.
 ./run.sh watch           # Progreso en vivo
 ./run.sh stop            # Para la descarga
 ./run.sh retry           # Reintenta fallos
+./run.sh import <dir>    # Importa tus FLAC/ALAC/WAV
 ./run.sh serve           # Arranca el reproductor web
 ./run.sh test            # Tests unitarios
 ./run.sh help            # Ayuda
@@ -206,6 +248,7 @@ spootify/
 │   ├── state_manager.py    # Estado de descargas + resume
 │   ├── downloader.py       # Wrapper de Zotify
 │   ├── artwork.py          # Extracción de carátulas
+│   ├── local_import.py     # Importador de audio propio (FLAC, ALAC...)
 │   └── server.py           # Reproductor web (FastAPI)
 ├── web/                    # Front-end React (Babel in-browser)
 │   ├── index.html

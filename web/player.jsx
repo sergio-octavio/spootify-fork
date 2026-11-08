@@ -86,6 +86,14 @@ function FullPlayer({ song, artist, isPlaying, progress, liked, shuffle, repeat,
               color: 'rgba(255,255,255,0.65)', fontSize: 14, marginTop: 2,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>{artist?.name}</div>
+            {song.quality && (
+              <div style={{
+                display: 'inline-block', marginTop: 6, padding: '2px 6px', borderRadius: 4,
+                fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+                color: song.source === 'local' ? accent : 'rgba(255,255,255,0.55)',
+                border: `1px solid ${song.source === 'local' ? accent : 'rgba(255,255,255,0.25)'}`,
+              }}>{song.quality}</div>
+            )}
           </div>
           <button onClick={onLike} style={{ background: 'none', border: 'none', padding: 6, cursor: 'pointer' }}>
             {liked ? Icon.heart(26, accent, true) : Icon.heart(26, 'rgba(255,255,255,0.7)')}

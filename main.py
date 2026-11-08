@@ -129,6 +129,8 @@ def cmd_download(args: argparse.Namespace) -> int:
                     path=result.path or "",
                     bitrate_kbps=_quality_to_kbps(args.download_quality),
                     size_bytes=result.size_bytes,
+                    source="zotify",
+                    codec=Path(result.path).suffix.lower().lstrip(".") if result.path else args.audio_format,
                 )
                 ok += 1
                 logger.info(
@@ -217,6 +219,45 @@ def _progress_bar(done: int, total: int, width: int = 24) -> str:
     return f"[{bar}] {done}/{total} ({frac*100:.1f}%)"
 
 
+# --- subcomando: import-local ----------------------------------------------
+
+def cmd_import_local(args: argparse.Namespace) -> int:
+    from spootify.local_import import import_local_library
+
+    index = _load_index(args.index)
+    state = StateManager(state_dir=args.state_dir)
+    state.load()
+
+    report = import_local_library(
+        source_dir=args.import_local,
+        index=index,
+        state=state,
+        library_root=args.library,
+        mode=args.import_mode,
+        upgrade=not args.no_upgrade,
+        dry_run=args.dry_run,
+    )
+    if not args.dry_run:
+        state.save()
+
+    print("=" * 50)
+    print("Importación local" + (" (dry-run, no se ha copiado nada)" if args.dry_run else ""))
+    print("=" * 50)
+    print(f"Importadas:                 {len(report.imported)}")
+    print(f"  de ellas, mejoran calidad:{len(report.upgraded)}")
+    print(f"Ya estaban (igual o mejor): {len(report.skipped_existing)}")
+    print(f"Sin coincidencia en índice: {len(report.unmatched)}")
+    print(f"Ilegibles:                  {len(report.unreadable)}")
+    if report.unmatched:
+        print("-" * 50)
+        print("Sin coincidencia (revisa sus tags de artista/título o ISRC):")
+        for p in report.unmatched[:30]:
+            print(f"  · {p}")
+        if len(report.unmatched) > 30:
+            print(f"  … y {len(report.unmatched) - 30} más")
+    return 0
+
+
 # --- argparse ---------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -231,6 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("--retry-failed", action="store_true", help="Reintenta solo los tracks de failed.json")
     action.add_argument("--serve", action="store_true", help="Arranca el reproductor web local")
     action.add_argument("--progress", action="store_true", help="Muestra el progreso actual de la descarga")
+    action.add_argument("--import-local", type=Path, metavar="DIR", help="Importa audio propio (FLAC, ALAC, WAV...) desde DIR")
 
     # progress
     p.add_argument("--watch", action="store_true", help="Con --progress: refresca en vivo (Ctrl+C para salir)")
@@ -244,7 +286,11 @@ def build_parser() -> argparse.ArgumentParser:
     # build-index
     p.add_argument("--csv-dir", type=Path, default=Path("playlists_csv"))
     p.add_argument("--output", type=Path, default=Path("state/track_index.json"), help="Ruta del índice generado por --build-index")
-    p.add_argument("--dry-run", action="store_true", help="Solo con --build-index: no escribe el índice")
+    p.add_argument("--dry-run", action="store_true", help="Con --build-index / --import-local: no escribe nada")
+
+    # import-local
+    p.add_argument("--import-mode", default="copy", choices=["copy", "move", "link"], help="Copiar, mover o hacer hardlink de los ficheros importados")
+    p.add_argument("--no-upgrade", action="store_true", help="No sustituir canciones ya descargadas aunque la importada sea de más calidad")
 
     # download
     p.add_argument("--index", type=Path, default=Path("state/track_index.json"), help="Índice ya generado (input de --download)")
@@ -281,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_serve(args)
     if args.progress:
         return cmd_progress(args)
+    if args.import_local:
+        return cmd_import_local(args)
     parser.error("Acción no soportada")
     return 1
 
