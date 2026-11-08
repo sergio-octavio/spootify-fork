@@ -30,11 +30,11 @@
 <main>
   <img src="icon.png" alt="" />
   <h1>Spootify</h1>
-  <p>Escribe la dirección de tu ordenador con Spootify. En el ordenador ejecuta
-     <code>./run.sh serve</code> y te mostrará la IP.</p>
+  <p>Pega la dirección que muestra <code>./run.sh serve</code> en tu ordenador
+     (la que termina en <code>?token=…</code>).</p>
   <label for="url">Dirección del servidor</label>
   <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
-         placeholder="http://192.168.1.20:8000" />
+         placeholder="http://192.168.1.20:8000/?token=…" />
   <button id="go" class="primary">Conectar</button>
   <button id="cancel" class="ghost" hidden>Cambiar servidor</button>
   <div id="status" class="status" role="status"></div>
@@ -45,16 +45,20 @@
   const input = $('url'), status = $('status'), go = $('go'), cancel = $('cancel');
   let autoTimer = null;
 
+  // Devuelve { origin, url }: url conserva el ?token=... de emparejamiento
+  // que muestra ./run.sh serve (el servidor lo cambia por una cookie).
   function normalize(raw) {
     let s = (raw || '').trim();
-    if (!s) return '';
+    if (!s) return null;
     if (!/^https?:\/\//i.test(s)) s = 'http://' + s;
     // Si no indica puerto y es http, el servidor de Spootify usa el 8000.
     try {
       const u = new URL(s);
       if (!u.port && u.protocol === 'http:' && !/\.ts\.net$/.test(u.hostname)) u.port = '8000';
-      return u.origin + '/';
-    } catch (e) { return ''; }
+      const token = u.searchParams.get('token');
+      const origin = u.origin + '/';
+      return { origin, url: token ? origin + '?token=' + encodeURIComponent(token) : origin };
+    } catch (e) { return null; }
   }
 
   async function reachable(base) {
@@ -67,7 +71,8 @@
     } catch (e) { return false; } finally { clearTimeout(t); }
   }
 
-  async function connect(base) {
+  async function connect(target) {
+    const base = target.origin;
     status.className = 'status';
     status.textContent = 'Conectando con ' + base + '…';
     go.disabled = true;
@@ -78,8 +83,8 @@
       status.textContent = 'No responde. ¿Está el ordenador encendido, en la misma WiFi y con ./run.sh serve?';
       return;
     }
-    localStorage.setItem(KEY, base);
-    location.href = base;
+    localStorage.setItem(KEY, target.url);
+    location.href = target.url;
   }
 
   go.addEventListener('click', () => {
@@ -94,11 +99,11 @@
     status.textContent = ''; input.focus();
   });
 
-  const saved = localStorage.getItem(KEY);
+  const saved = normalize(localStorage.getItem(KEY));
   if (saved) {
-    input.value = saved;
+    input.value = saved.url;
     cancel.hidden = false;
-    status.textContent = 'Abriendo ' + saved + '…';
+    status.textContent = 'Abriendo ' + saved.origin + '…';
     autoTimer = setTimeout(() => { cancel.hidden = true; connect(saved); }, 1200);
   } else {
     input.focus();

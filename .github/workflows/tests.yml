@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# El token de GitHub de estos jobs solo puede leer el repo.
+permissions:
+  contents: read
+
 jobs:
   pytest:
     runs-on: ubuntu-latest

@@ -4,10 +4,12 @@
 //   siga abriéndose aunque el servidor tarde en responder.
 // - NO toca /media (audio con peticiones Range) ni /api salvo library.json,
 //   que se sirve de la red y cae a la última copia si no hay conexión.
-const CACHE = 'spootify-shell-v1';
+const CACHE = 'spootify-shell-v2';
 const SHELL = [
   '/', '/index.html', '/components.jsx', '/screens.jsx', '/player.jsx',
   '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
+  '/vendor/react.production.min.js', '/vendor/react-dom.production.min.js',
+  '/vendor/babel.min.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -35,7 +37,7 @@ self.addEventListener('fetch', (event) => {
       && url.pathname !== '/api/library.json') return;
 
   const sameOrigin = url.origin === location.origin;
-  const cdn = /(^|\.)unpkg\.com$|fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
+  const cdn = /^fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (!sameOrigin && !cdn) return;
 
   // Network-first: siempre la versión nueva si el servidor responde.

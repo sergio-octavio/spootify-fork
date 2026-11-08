@@ -44,6 +44,7 @@ def _print_index_summary(stats, index, output_path, dry_run) -> None:
     print(f"Duplicados colapsados:  {stats.duplicates_collapsed}")
     print(f"Tracks locales saltados:{stats.local_skipped}")
     print(f"Filas sin URI saltadas: {stats.empty_uri_skipped}")
+    print(f"URIs no válidas saltadas: {stats.invalid_uri_skipped}")
     print("-" * 50)
     if dry_run:
         print("(dry-run) no se ha escrito el índice")
@@ -296,6 +297,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="0.0.0.0", help="Host del servidor web (default: 0.0.0.0, accesible desde la LAN)")
     p.add_argument("--port", type=int, default=8000, help="Puerto del servidor web (default: 8000)")
     p.add_argument("--web-dir", type=Path, default=Path("web"))
+    p.add_argument("--no-auth", action="store_true",
+                   help="Desactiva el token de acceso (cualquiera en tu red podrá entrar)")
+    p.add_argument("--reset-token", action="store_true",
+                   help="Genera un token nuevo (los móviles emparejados tendrán que volver a emparejarse)")
+    p.add_argument("--allow-host", action="append", default=[], metavar="NOMBRE",
+                   help="Nombre de host extra permitido (además de IPs, localhost, *.local y *.ts.net)")
 
     # build-index
     p.add_argument("--csv-dir", type=Path, default=Path("playlists_csv"))
@@ -460,20 +467,30 @@ def _lan_ip() -> str | None:
 
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
+    from spootify.security import load_or_create_token
     from spootify.server import create_app
 
     project_root = Path(__file__).parent.resolve()
+    token = None if args.no_auth else load_or_create_token(args.state_dir, reset=args.reset_token)
     app = create_app(
         project_root=project_root,
         downloads_root=args.library,
         web_dir=args.web_dir,
+        token=token,
+        extra_hosts=tuple(args.allow_host),
     )
-    logger.info("Spootify web: http://%s:%d", args.host, args.port)
+    suffix = f"/?token={token}" if token else ""
+    logger.info("Spootify web (en este ordenador): http://localhost:%d", args.port)
     lan_ip = _lan_ip()
     logger.info(
-        "Desde tu móvil en la misma WiFi (o en la app Android): http://%s:%d",
-        lan_ip or "<ip-de-este-ordenador>", args.port,
+        "Desde tu móvil (o en la app Android), abre una vez: http://%s:%d%s",
+        lan_ip or "<ip-de-este-ordenador>", args.port, suffix,
     )
+    if token:
+        logger.info("Con Tailscale: https://<tu-ordenador>.<tu-tailnet>.ts.net%s", suffix)
+        logger.info("No compartas esa dirección: da acceso a tu música. Cambiar el token: ./run.sh serve --reset-token")
+    else:
+        logger.warning("--no-auth: cualquiera en tu red puede ver y descargar tu música.")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info", access_log=False)
     return 0
 

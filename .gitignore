@@ -9,6 +9,7 @@ nohup.out
 # Estado/biblioteca privada del usuario — NO subir
 state/track_index.json
 state/credentials.json
+state/server_token
 state/song_archive.txt
 state/downloaded.json
 state/failed.json

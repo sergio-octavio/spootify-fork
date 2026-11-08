@@ -127,3 +127,18 @@ def test_empty_dir_returns_empty_index(tmp_path: Path) -> None:
 def test_missing_dir_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         build_track_index(tmp_path / "nope")
+
+
+def test_invalid_uris_are_skipped(tmp_path: Path) -> None:
+    d = tmp_path / "csvs"
+    d.mkdir()
+    _write_csv(
+        d / "Rara.csv",
+        [
+            "--help,Inyección,Artist A,Album X,2020,,",
+            "spotify:track:ok123,Buena,Artist A,Album X,2020,,",
+        ],
+    )
+    index, stats = build_track_index(d)
+    assert list(index) == ["spotify:track:ok123"]
+    assert stats.invalid_uri_skipped == 1

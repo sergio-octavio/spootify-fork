@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,7 @@ class ParseStats:
     duplicates_collapsed: int = 0
     local_skipped: int = 0
     empty_uri_skipped: int = 0
+    invalid_uri_skipped: int = 0
 
 
 def _split_artists(raw: str) -> list[str]:
@@ -36,6 +38,15 @@ def _playlist_name_from_path(csv_path: Path) -> str:
     # TODO: si Exportify incrusta metadata de la playlist en el CSV, preferir eso.
     # Por ahora derivamos del nombre del fichero.
     return csv_path.stem
+
+
+# URIs que aceptamos. Se pasan como argumento a Zotify, así que cualquier otra
+# cosa (p. ej. un texto que empiece por "-" en un CSV manipulado) se descarta.
+_VALID_URI_RE = re.compile(r"^spotify:(track|episode):[A-Za-z0-9]+$")
+
+
+def _is_valid_uri(uri: str) -> bool:
+    return bool(_VALID_URI_RE.match(uri))
 
 
 def _is_local_uri(uri: str) -> bool:
@@ -115,6 +126,10 @@ def build_track_index(
                 continue
             if _is_local_uri(uri):
                 stats.local_skipped += 1
+                continue
+            if not _is_valid_uri(uri):
+                stats.invalid_uri_skipped += 1
+                logger.warning("%s: URI no válida, se ignora: %.60r", csv_path.name, uri)
                 continue
 
             added_at = _clean(row.get("Added At"))
