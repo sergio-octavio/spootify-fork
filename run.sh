@@ -69,6 +69,11 @@ case "$cmd" in
   serve)
     $PY main.py --serve "$@"
     ;;
+  import)
+    if [ $# -lt 1 ]; then echo "Uso: ./run.sh import <carpeta> [--dry-run] [--import-mode move|link]" >&2; exit 1; fi
+    DIR=$1; shift
+    $PY main.py --import-local "$DIR" "$@"
+    ;;
   test)
     $PY -m pytest tests/ -v
     ;;
@@ -88,6 +93,7 @@ Uso: ./run.sh <comando>
   watch             Muestra progreso en vivo (Ctrl+C para salir)
   stop              Para la descarga en background
   retry             Reintenta canciones que fallaron
+  import <carpeta>  Importa tus FLAC/ALAC/WAV (Bandcamp, Qobuz, CDs...)
   serve             Arranca el reproductor web (http://localhost:8000)
   test              Ejecuta los tests
 
