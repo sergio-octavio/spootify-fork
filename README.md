@@ -141,9 +141,26 @@ Abre <http://localhost:8000> en cualquier navegador del Mac.
 
 **Desde el móvil** (mismo WiFi):
 
-1. Mira la IP de tu Mac: `ipconfig getifaddr en0` (o mira en Ajustes → Wi-Fi).
-2. En el iPhone/Android abre el navegador y entra a `http://<ip-del-mac>:8000`.
+1. `./run.sh serve` muestra una dirección de emparejamiento como
+   `http://192.168.1.20:8000/?token=Abc123…`.
+2. Ábrela **una vez** en el navegador del móvil. Spootify guarda el token en
+   una cookie y ya no te lo vuelve a pedir.
 3. Safari → Compartir → "Añadir a pantalla de inicio". Se comporta como app.
+
+> [!IMPORTANT]
+> **El token protege tu música.** Sin él, cualquiera conectado a tu misma WiFi
+> podría ver tu biblioteca y descargar tus canciones. No compartas la
+> dirección con `?token=`. Si se te escapa, genera otro con
+> `./run.sh serve --reset-token` (tendrás que volver a emparejar el móvil).
+> En el propio ordenador (`http://localhost:8000`) no hace falta token.
+>
+> Por la WiFi la conexión va sin cifrar. Para cifrarla (y escuchar tu música
+> fuera de casa) usa Tailscale, ver [Usar Spootify en Android](#usar-spootify-en-android).
+>
+> Opciones: `--no-auth` desactiva el token (no recomendado),
+> `--host 127.0.0.1` hace que solo se pueda entrar desde el propio ordenador
+> (o vía `tailscale serve`), y `--allow-host mipc.lan` permite un nombre de
+> host propio (por defecto se aceptan IPs, `localhost`, `*.local` y `*.ts.net`).
 
 ### Paso 6 (opcional) — Importar tu música en alta calidad (FLAC, ALAC…)
 
@@ -255,7 +272,7 @@ Es lo más sencillo y lo que mejor funciona en segundo plano: controles en la
 pantalla de bloqueo y en la notificación, botones de auriculares Bluetooth y
 Android Auto.
 
-1. En el móvil abre Chrome en `http://<ip-del-ordenador>:8000`.
+1. En el móvil abre Chrome en la dirección con `?token=` que muestra `./run.sh serve`.
 2. Menú ⋮ → **Añadir a pantalla de inicio** / **Instalar app**.
 
 Chrome solo instala la app "de verdad" (pantalla completa, icono propio,
@@ -269,14 +286,16 @@ tailscale serve --bg 8000
 ```
 
 Instala Tailscale también en el móvil con la misma cuenta, y abre en Chrome
-la dirección `https://<nombre-del-ordenador>.<tu-tailnet>.ts.net` que te
-muestra el comando. Desde ahí, **Instalar app**.
+la dirección `https://<nombre-del-ordenador>.<tu-tailnet>.ts.net/?token=…`
+(el nombre te lo muestra `tailscale serve` y el token, `./run.sh serve`). Desde ahí, **Instalar app**.
 
 ### Opción B — APK de Android
 
 En `android-app/` hay una app Android (Capacitor) que abre el reproductor de
-tu ordenador. La primera vez te pide la dirección (`192.168.1.20:8000`, o la
-de Tailscale) y la recuerda. El botón "atrás" la manda a segundo plano sin
+tu ordenador. La primera vez te pide la dirección: pega la que muestra
+`./run.sh serve`, con su `?token=…` (o la de Tailscale), y la recuerda. Solo
+navega a direcciones de tu red local (`192.168.x.x`, `10.x.x.x`,
+`172.16-31.x.x`, `*.local`) o de Tailscale (`100.x.x.x`, `*.ts.net`). El botón "atrás" la manda a segundo plano sin
 cortar la música, y mantiene una notificación para que Android no la cierre
 con la pantalla apagada.
 

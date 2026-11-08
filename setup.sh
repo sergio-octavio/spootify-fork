@@ -64,8 +64,30 @@ pip install -r requirements.txt --quiet
 
 # 5. Zotify desde el fork de DraftKinner (soporte OAuth, indispensable para
 #    cuentas creadas vía Facebook).
-step "Instalando Zotify (fork DraftKinner con OAuth)"
-pip install --quiet 'git+https://github.com/DraftKinner/zotify.git'
+#    Zotify maneja tus credenciales de Spotify, así que se fija a un commit
+#    concreto (zotify.ref): un cambio en ese repo no se instala solo al volver
+#    a lanzar ./setup.sh. Para actualizarlo a propósito: ./setup.sh --update-zotify
+ZOTIFY_REPO="https://github.com/DraftKinner/zotify.git"
+ZOTIFY_REF_FILE="zotify.ref"
+if [ -f "$ZOTIFY_REF_FILE" ] && [ "${1:-}" != "--update-zotify" ]; then
+  ZOTIFY_REF=$(tr -d '[:space:]' < "$ZOTIFY_REF_FILE")
+  if ! [[ "$ZOTIFY_REF" =~ ^[0-9a-f]{40}$ ]]; then
+    fail "$ZOTIFY_REF_FILE no contiene un commit válido (40 caracteres hex)."
+  fi
+  step "Instalando Zotify (fork DraftKinner, commit ${ZOTIFY_REF:0:10})"
+  pip install --quiet "git+${ZOTIFY_REPO}@${ZOTIFY_REF}"
+else
+  step "Instalando la última versión de Zotify (fork DraftKinner con OAuth)"
+  pip install --quiet --upgrade --force-reinstall --no-deps "git+${ZOTIFY_REPO}"
+  pip install --quiet "git+${ZOTIFY_REPO}"
+  ZOTIFY_REF=$(python3 -c 'import json, importlib.metadata as m; print(json.loads(m.distribution("zotify").read_text("direct_url.json"))["vcs_info"]["commit_id"])' 2>/dev/null || true)
+  if [[ "$ZOTIFY_REF" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "$ZOTIFY_REF" > "$ZOTIFY_REF_FILE"
+    echo "Zotify fijado al commit ${ZOTIFY_REF:0:10} (guardado en $ZOTIFY_REF_FILE)."
+  else
+    warn "No pude leer el commit de Zotify instalado; no se ha fijado la versión."
+  fi
+fi
 
 # 5b. yt-dlp (fuente alternativa: YouTube Music). Se actualiza a menudo porque
 #     YouTube cambia; vuelve a lanzar ./setup.sh si las descargas empiezan a fallar.

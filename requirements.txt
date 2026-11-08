@@ -1,5 +1,6 @@
 pandas>=2.0
 pytest>=8.0
+httpx>=0.27  # para los tests del servidor (TestClient)
 fastapi>=0.110
 uvicorn>=0.30
 mutagen>=1.47

@@ -80,6 +80,12 @@ def download_track(
     Detecta el fichero creado por diff antes/después en `library_root`,
     porque Zotify no imprime el path final de forma fiable.
     """
+    if not uri.startswith("spotify:"):
+        # Nunca pasar a Zotify algo que pueda interpretarse como una opción.
+        return DownloadResult(
+            uri=uri, success=False, path=None, classification="unavailable",
+            reason="URI no válida", stdout_tail="", stderr_tail="", elapsed_seconds=0.0,
+        )
     library_root.mkdir(parents=True, exist_ok=True)
     before = _snapshot_files(library_root)
 

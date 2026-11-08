@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 import mutagen
 
 from .artwork import album_dir_for
+from .security import AccessGuard
 
 logger = logging.getLogger(__name__)
 
@@ -264,12 +265,18 @@ def create_app(
     project_root: Path,
     downloads_root: Path | None = None,
     web_dir: Path | None = None,
+    token: str | None = None,
+    extra_hosts: tuple[str, ...] = (),
 ) -> FastAPI:
+    """Crea la app. Con `token`, todo (salvo localhost) exige el token de acceso;
+    la comprobación de Host/Origin se aplica siempre (ver security.py)."""
     project_root = Path(project_root).resolve()
     downloads_root = Path(downloads_root or project_root / "downloads" / "raw").resolve()
     web_dir = Path(web_dir or project_root / "web").resolve()
 
-    app = FastAPI(title="Spootify")
+    # Sin /docs ni /openapi.json: no hacen falta y describen la API a cualquiera.
+    app = FastAPI(title="Spootify", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(AccessGuard, token=token, extra_hosts=extra_hosts)
 
     # Cache en memoria invalidado por mtime de state/downloaded.json. Así,
     # mientras corre la descarga en background, la UI ve nuevos tracks al recargar.
